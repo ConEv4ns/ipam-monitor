@@ -1,9 +1,12 @@
 from flask import Flask, jsonify, render_template, request
 
 from database import (
+    current_time,
     get_device,
     get_devices,
+    get_scan_history,
     initialise_database,
+    save_failed_scan,
     save_scan,
     update_device
 )
@@ -21,9 +24,24 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/history")
+def history():
+    return render_template("history.html")
+
+
 @app.route("/devices")
 def devices():
     return jsonify(get_devices())
+
+
+@app.route("/api/scans")
+def scan_history():
+    try:
+        limit = int(request.args.get("limit", 50))
+    except ValueError:
+        return jsonify({"error": "Limit must be a number."}), 400
+
+    return jsonify(get_scan_history(limit))
 
 
 @app.route("/devices/<int:device_id>", methods=["PATCH"])
@@ -53,12 +71,19 @@ def edit_device(device_id):
 
 @app.route("/scan")
 def scan():
-    discovered_devices = scan_range(NETWORK_RANGE)
+    started_at = current_time()
 
-    # Save replies before returning stored records
-    save_scan(discovered_devices)
+    try:
+        discovered_devices = scan_range(NETWORK_RANGE)
 
-    return jsonify(get_devices())
+        # Save replies before returning stored records
+        save_scan(discovered_devices)
+
+        return jsonify(get_devices())
+    except Exception:
+        # Record failed scans without exposing internal errors
+        save_failed_scan(started_at)
+        return jsonify({"error": "Network scan failed."}), 500
 
 
 if __name__ == "__main__":

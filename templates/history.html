@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Scan History | IPAM Monitor</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <main class="container">
+
+        <nav class="page-navigation" aria-label="Main navigation">
+            <a href="/">Dashboard</a>
+            <a href="/history">Scan History</a>
+        </nav>
+
+        <header>
+            <div>
+                <p class="eyebrow">NETWORK MANAGEMENT</p>
+
+                <h1>Scan History</h1>
+
+                <p class="subtitle">
+                    Review previous network scans and their results.
+                </p>
+            </div>
+
+            <button id="refresh-button" type="button">
+                Refresh History
+            </button>
+        </header>
+
+        <section class="summary">
+
+            <div class="summary-card">
+                <span class="summary-label">Recorded scans</span>
+                <strong id="scan-count">0</strong>
+            </div>
+
+            <div class="summary-card">
+                <span class="summary-label">Successful scans</span>
+                <strong id="successful-count">0</strong>
+            </div>
+
+            <div class="summary-card">
+                <span class="summary-label">Latest result</span>
+                <strong id="latest-result">No scans</strong>
+            </div>
+
+        </section>
+
+        <section class="dashboard">
+
+            <div class="dashboard-heading">
+                <div>
+                    <h2>Previous Scans</h2>
+
+                    <p>
+                        Showing the 50 most recent network scans
+                    </p>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Scan ID</th>
+                            <th>Started</th>
+                            <th>Completed</th>
+                            <th>Devices Found</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="history-list">
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                Loading scan history...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </section>
+
+        <p id="history-message" class="page-message"></p>
+
+    </main>
+
+    <script>
+        const refreshButton = document.getElementById("refresh-button");
+        const historyList = document.getElementById("history-list");
+        const historyMessage = document.getElementById("history-message");
+
+        const scanCount = document.getElementById("scan-count");
+        const successfulCount = document.getElementById("successful-count");
+        const latestResult = document.getElementById("latest-result");
+
+
+        function formatDate(dateValue) {
+            if (!dateValue) {
+                return "Not completed";
+            }
+
+            const date = new Date(dateValue);
+
+            if (Number.isNaN(date.getTime())) {
+                return "Invalid date";
+            }
+
+            return date.toLocaleString();
+        }
+
+
+        function createTextCell(text) {
+            const cell = document.createElement("td");
+
+            cell.textContent = text ?? "";
+
+            return cell;
+        }
+
+
+        function createStatusCell(status) {
+            const cell = document.createElement("td");
+            const badge = document.createElement("span");
+
+            const safeStatus = status || "unknown";
+
+            badge.className = `scan-badge ${safeStatus}`;
+            badge.textContent = safeStatus;
+
+            cell.appendChild(badge);
+
+            return cell;
+        }
+
+
+        function displayHistory(scans) {
+            historyList.innerHTML = "";
+
+            scanCount.textContent = scans.length;
+
+            const successfulScans = scans.filter(
+                scan => scan.status === "completed"
+            );
+
+            successfulCount.textContent = successfulScans.length;
+
+
+            if (scans.length === 0) {
+                latestResult.textContent = "No scans";
+
+                const row = document.createElement("tr");
+                const cell = document.createElement("td");
+
+                cell.colSpan = 5;
+                cell.className = "empty-state";
+                cell.textContent = "No scan history found.";
+
+                row.appendChild(cell);
+                historyList.appendChild(row);
+
+                return;
+            }
+
+
+            // The API should return newest scans first.
+            const latestScan = scans[0];
+
+            latestResult.textContent =
+                `${latestScan.devices_found ?? 0} devices, ${latestScan.status ?? "unknown"}`;
+
+
+            scans.forEach(scan => {
+                const row = document.createElement("tr");
+
+                row.append(
+                    createTextCell(scan.id),
+                    createTextCell(formatDate(scan.started_at)),
+                    createTextCell(formatDate(scan.completed_at)),
+                    createTextCell(scan.devices_found ?? 0),
+                    createStatusCell(scan.status)
+                );
+
+                historyList.appendChild(row);
+            });
+        }
+
+
+        async function loadHistory() {
+            refreshButton.disabled = true;
+            refreshButton.textContent = "Refreshing...";
+
+            historyMessage.textContent = "";
+
+
+            try {
+                const response = await fetch("/api/scans?limit=50");
+
+                const result = await response.json();
+
+
+                if (!response.ok) {
+                    throw new Error(
+                        result.error || "History request failed"
+                    );
+                }
+
+
+                /*
+                 * The API should return an array of scans.
+                 *
+                 * Example:
+                 *
+                 * [
+                 *     {
+                 *         "id": 1,
+                 *         "started_at": "...",
+                 *         "completed_at": "...",
+                 *         "devices_found": 5,
+                 *         "status": "completed"
+                 *     }
+                 * ]
+                 */
+
+                if (!Array.isArray(result)) {
+                    throw new Error(
+                        "Invalid response from scan history API"
+                    );
+                }
+
+
+                displayHistory(result);
+
+            } catch (error) {
+
+                historyList.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            Could not load scan history.
+                        </td>
+                    </tr>
+                `;
+
+                scanCount.textContent = "0";
+                successfulCount.textContent = "0";
+                latestResult.textContent = "Unavailable";
+
+                historyMessage.textContent =
+                    error.message || "Something went wrong.";
+
+            } finally {
+
+                refreshButton.disabled = false;
+                refreshButton.textContent = "Refresh History";
+            }
+        }
+
+
+        refreshButton.addEventListener(
+            "click",
+            loadHistory
+        );
+
+
+        // Load history automatically when the page opens.
+        loadHistory();
+    </script>
+
+</body>
+</html>

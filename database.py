@@ -49,7 +49,7 @@ def save_scan(devices):
     timestamp = current_time()
 
     with get_connection() as connection:
-        # Reset status before processing replies
+        # Reset device status before processing replies
         connection.execute("UPDATE devices SET online = 0")
 
         for device in devices:
@@ -73,7 +73,7 @@ def save_scan(devices):
                 timestamp
             ))
 
-        # Store scan history
+        # Store the completed scan
         connection.execute("""
             INSERT INTO scans (
                 started_at,
@@ -86,6 +86,24 @@ def save_scan(devices):
             timestamp,
             timestamp,
             len(devices)
+        ))
+
+
+def save_failed_scan(started_at):
+    completed_at = current_time()
+
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO scans (
+                started_at,
+                completed_at,
+                devices_found,
+                status
+            )
+            VALUES (?, ?, 0, 'failed')
+        """, (
+            started_at,
+            completed_at
         ))
 
 
@@ -168,6 +186,26 @@ def update_device(device_id, name, device_type, notes, trust_status):
         ))
 
     return cursor.rowcount == 1
+
+
+def get_scan_history(limit=50):
+    # Limit history results to a safe range
+    limit = max(1, min(limit, 200))
+
+    with get_connection() as connection:
+        rows = connection.execute("""
+            SELECT
+                id,
+                started_at,
+                completed_at,
+                devices_found,
+                status
+            FROM scans
+            ORDER BY id DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+    return [dict(row) for row in rows]
 
 
 if __name__ == "__main__":
