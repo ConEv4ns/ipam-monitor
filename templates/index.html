@@ -47,6 +47,54 @@
                 </div>
             </div>
 
+            <div class="filters">
+                <div class="search-field">
+                    <label for="search-input">Search devices</label>
+                    <input
+                        id="search-input"
+                        type="search"
+                        placeholder="Search IP, MAC, name, type or notes"
+                    >
+                </div>
+
+                <div class="filter-field">
+                    <label for="status-filter">Device status</label>
+                    <select id="status-filter">
+                        <option value="all">All statuses</option>
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                    </select>
+                </div>
+
+                <div class="filter-field">
+                    <label for="trust-filter">Trust status</label>
+                    <select id="trust-filter">
+                        <option value="all">All trust levels</option>
+                        <option value="trusted">Trusted</option>
+                        <option value="unknown">Unknown</option>
+                        <option value="untrusted">Untrusted</option>
+                    </select>
+                </div>
+
+                <div class="filter-field">
+                    <label for="sort-select">Sort devices</label>
+                    <select id="sort-select">
+                        <option value="ip-ascending">IP: Low to high</option>
+                        <option value="ip-descending">IP: High to low</option>
+                        <option value="name-ascending">Name: A to Z</option>
+                        <option value="name-descending">Name: Z to A</option>
+                    </select>
+                </div>
+
+                <button id="clear-filters" class="secondary-button" type="button">
+                    Clear Filters
+                </button>
+            </div>
+
+            <div class="results-summary">
+                <span id="results-count">Showing 0 devices</span>
+            </div>
+
             <div class="table-container">
                 <table>
                     <thead>
@@ -126,7 +174,11 @@
                 <p id="form-message" class="form-message"></p>
 
                 <div class="form-actions">
-                    <button id="cancel-edit" class="secondary-button" type="button">
+                    <button
+                        id="cancel-edit"
+                        class="secondary-button"
+                        type="button"
+                    >
                         Cancel
                     </button>
 
@@ -143,6 +195,13 @@
         const statusText = document.getElementById("status");
         const deviceCount = document.getElementById("device-count");
         const deviceList = document.getElementById("device-list");
+        const resultsCount = document.getElementById("results-count");
+
+        const searchInput = document.getElementById("search-input");
+        const statusFilter = document.getElementById("status-filter");
+        const trustFilter = document.getElementById("trust-filter");
+        const sortSelect = document.getElementById("sort-select");
+        const clearFiltersButton = document.getElementById("clear-filters");
 
         const editModal = document.getElementById("edit-modal");
         const editForm = document.getElementById("edit-form");
@@ -152,19 +211,85 @@
 
         let savedDevices = [];
 
-        function sortDevices(devices) {
-            return [...devices].sort((a, b) => {
-                const aParts = a.ip_address.split(".").map(Number);
-                const bParts = b.ip_address.split(".").map(Number);
+        function compareIpAddresses(firstIp, secondIp) {
+            const firstParts = firstIp.split(".").map(Number);
+            const secondParts = secondIp.split(".").map(Number);
 
-                for (let i = 0; i < 4; i++) {
-                    if (aParts[i] !== bParts[i]) {
-                        return aParts[i] - bParts[i];
-                    }
+            for (let index = 0; index < 4; index++) {
+                if (firstParts[index] !== secondParts[index]) {
+                    return firstParts[index] - secondParts[index];
+                }
+            }
+
+            return 0;
+        }
+
+        function sortDevices(devices) {
+            const sortedDevices = [...devices];
+
+            sortedDevices.sort((firstDevice, secondDevice) => {
+                const sortOption = sortSelect.value;
+
+                if (sortOption === "ip-descending") {
+                    return compareIpAddresses(
+                        secondDevice.ip_address,
+                        firstDevice.ip_address
+                    );
                 }
 
-                return 0;
+                if (sortOption === "name-ascending") {
+                    return (firstDevice.name || "").localeCompare(
+                        secondDevice.name || ""
+                    );
+                }
+
+                if (sortOption === "name-descending") {
+                    return (secondDevice.name || "").localeCompare(
+                        firstDevice.name || ""
+                    );
+                }
+
+                return compareIpAddresses(
+                    firstDevice.ip_address,
+                    secondDevice.ip_address
+                );
             });
+
+            return sortedDevices;
+        }
+
+        function filterDevices() {
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            const selectedStatus = statusFilter.value;
+            const selectedTrust = trustFilter.value;
+
+            const filteredDevices = savedDevices.filter(device => {
+                const searchableValues = [
+                    device.ip_address,
+                    device.mac_address,
+                    device.name,
+                    device.device_type,
+                    device.notes
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase();
+
+                const matchesSearch = searchableValues.includes(searchTerm);
+
+                const matchesStatus =
+                    selectedStatus === "all" ||
+                    (selectedStatus === "online" && device.online) ||
+                    (selectedStatus === "offline" && !device.online);
+
+                const matchesTrust =
+                    selectedTrust === "all" ||
+                    device.trust_status === selectedTrust;
+
+                return matchesSearch && matchesStatus && matchesTrust;
+            });
+
+            displayDevices(sortDevices(filteredDevices));
         }
 
         function createBadge(text, className) {
@@ -181,8 +306,9 @@
         }
 
         function displayDevices(devices) {
-            savedDevices = devices;
             deviceList.innerHTML = "";
+            resultsCount.textContent =
+                `Showing ${devices.length} of ${savedDevices.length} devices`;
 
             if (devices.length === 0) {
                 const row = document.createElement("tr");
@@ -190,15 +316,16 @@
 
                 cell.colSpan = 7;
                 cell.className = "empty-state";
-                cell.textContent = "No saved devices found.";
+                cell.textContent = savedDevices.length
+                    ? "No devices match the selected filters."
+                    : "No saved devices found.";
 
                 row.appendChild(cell);
                 deviceList.appendChild(row);
-                deviceCount.textContent = "0";
                 return;
             }
 
-            sortDevices(devices).forEach(device => {
+            devices.forEach(device => {
                 const row = document.createElement("tr");
 
                 const statusCell = document.createElement("td");
@@ -225,7 +352,9 @@
                 editButton.type = "button";
                 editButton.className = "edit-button";
                 editButton.textContent = "Edit";
-                editButton.addEventListener("click", () => openEditor(device.id));
+                editButton.addEventListener("click", () => {
+                    openEditor(device.id);
+                });
 
                 actionsCell.appendChild(editButton);
 
@@ -241,9 +370,20 @@
 
                 deviceList.appendChild(row);
             });
+        }
 
-            const onlineCount = devices.filter(device => device.online).length;
+        function updateDeviceCount() {
+            const onlineCount = savedDevices.filter(
+                device => device.online
+            ).length;
+
             deviceCount.textContent = onlineCount;
+        }
+
+        function setDevices(devices) {
+            savedDevices = devices;
+            updateDeviceCount();
+            filterDevices();
         }
 
         function openEditor(deviceId) {
@@ -281,7 +421,7 @@
                 }
 
                 const devices = await response.json();
-                displayDevices(devices);
+                setDevices(devices);
             } catch (error) {
                 statusText.textContent = "Could not load devices";
             }
@@ -301,8 +441,8 @@
 
                 const devices = await response.json();
 
-                // Refresh the table with saved results
-                displayDevices(devices);
+                // Refresh filters with the latest results
+                setDevices(devices);
                 statusText.textContent = "Scan complete";
             } catch (error) {
                 statusText.textContent = "Scan failed";
@@ -353,11 +493,30 @@
             }
         });
 
+        searchInput.addEventListener("input", filterDevices);
+        statusFilter.addEventListener("change", filterDevices);
+        trustFilter.addEventListener("change", filterDevices);
+        sortSelect.addEventListener("change", filterDevices);
+
+        clearFiltersButton.addEventListener("click", () => {
+            searchInput.value = "";
+            statusFilter.value = "all";
+            trustFilter.value = "all";
+            sortSelect.value = "ip-ascending";
+            filterDevices();
+        });
+
         closeModalButton.addEventListener("click", closeEditor);
         cancelEditButton.addEventListener("click", closeEditor);
 
         editModal.addEventListener("click", event => {
             if (event.target === editModal) {
+                closeEditor();
+            }
+        });
+
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape" && !editModal.classList.contains("hidden")) {
                 closeEditor();
             }
         });
