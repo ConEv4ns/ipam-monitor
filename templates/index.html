@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPAM Monitor</title>
+</head>
+<body>
+    <h1>IPAM Monitor</h1>
+
+    <button id="scan-button">Scan Network</button>
+    <p id="status"></p>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>IP Address</th>
+                <th>MAC Address</th>
+            </tr>
+        </thead>
+        <tbody id="device-list"></tbody>
+    </table>
+
+    <script>
+        const scanButton = document.getElementById("scan-button");
+        const statusText = document.getElementById("status");
+        const deviceList = document.getElementById("device-list");
+
+        scanButton.addEventListener("click", async () => {
+            statusText.textContent = "Scanning...";
+            deviceList.innerHTML = "";
+
+            try {
+                const response = await fetch("/scan");
+                const devices = await response.json();
+
+                // Add each discovered device to the table
+                devices.forEach(device => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${device.ip}</td>
+                        <td>${device.mac}</td>
+                    `;
+                    deviceList.appendChild(row);
+                });
+
+                statusText.textContent = `Found ${devices.length} devices`;
+            } catch (error) {
+                statusText.textContent = "Scan failed";
+            }
+        });
+    </script>
+</body>
+</html>
