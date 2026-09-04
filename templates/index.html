@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IPAM Monitor</title>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>IPAM Monitor</title>
+   <title>IPAM Monitor</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <main class="container">
@@ -14,7 +15,7 @@
                 <p class="eyebrow">NETWORK MANAGEMENT</p>
                 <h1>IPAM Monitor</h1>
                 <p class="subtitle">
-                    Discover active devices on your local network.
+                    Discover and monitor devices on your local network.
                 </p>
             </div>
 
@@ -28,7 +29,7 @@
             </div>
 
             <div class="summary-card">
-                <span class="summary-label">Devices found</span>
+                <span class="summary-label">Online devices</span>
                 <strong id="device-count">0</strong>
             </div>
 
@@ -42,7 +43,7 @@
             <div class="dashboard-heading">
                 <div>
                     <h2>Discovered Devices</h2>
-                    <p>Results from the latest network scan</p>
+                    <p>Saved results from the latest network scan</p>
                 </div>
             </div>
 
@@ -50,13 +51,16 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>Status</th>
                             <th>IP Address</th>
                             <th>MAC Address</th>
+                            <th>Trust</th>
                         </tr>
                     </thead>
+
                     <tbody id="device-list">
-                        <tr id="empty-row">
-                            <td colspan="2" class="empty-state">
+                        <tr>
+                            <td colspan="4" class="empty-state">
                                 Run a scan to discover devices.
                             </td>
                         </tr>
@@ -72,6 +76,88 @@
         const deviceCount = document.getElementById("device-count");
         const deviceList = document.getElementById("device-list");
 
+        function sortDevices(devices) {
+            return devices.sort((a, b) => {
+                const aParts = a.ip_address.split(".").map(Number);
+                const bParts = b.ip_address.split(".").map(Number);
+
+                for (let i = 0; i < 4; i++) {
+                    if (aParts[i] !== bParts[i]) {
+                        return aParts[i] - bParts[i];
+                    }
+                }
+
+                return 0;
+            });
+        }
+
+        function displayDevices(devices) {
+            deviceList.innerHTML = "";
+
+            if (devices.length === 0) {
+                const row = document.createElement("tr");
+                const cell = document.createElement("td");
+
+                cell.colSpan = 4;
+                cell.className = "empty-state";
+                cell.textContent = "No saved devices found.";
+
+                row.appendChild(cell);
+                deviceList.appendChild(row);
+                deviceCount.textContent = "0";
+                return;
+            }
+
+            sortDevices(devices).forEach(device => {
+                const row = document.createElement("tr");
+
+                const statusCell = document.createElement("td");
+                const statusBadge = document.createElement("span");
+
+                statusBadge.className = device.online
+                    ? "status-badge online"
+                    : "status-badge offline";
+
+                statusBadge.textContent = device.online ? "Online" : "Offline";
+                statusCell.appendChild(statusBadge);
+
+                const ipCell = document.createElement("td");
+                ipCell.textContent = device.ip_address;
+
+                const macCell = document.createElement("td");
+                macCell.textContent = device.mac_address;
+
+                const trustCell = document.createElement("td");
+                const trustBadge = document.createElement("span");
+
+                trustBadge.className = `trust-badge ${device.trust_status}`;
+                trustBadge.textContent = device.trust_status;
+
+                trustCell.appendChild(trustBadge);
+
+                row.append(statusCell, ipCell, macCell, trustCell);
+                deviceList.appendChild(row);
+            });
+
+            const onlineCount = devices.filter(device => device.online).length;
+            deviceCount.textContent = onlineCount;
+        }
+
+        async function loadDevices() {
+            try {
+                const response = await fetch("/devices");
+
+                if (!response.ok) {
+                    throw new Error("Device request failed");
+                }
+
+                const devices = await response.json();
+                displayDevices(devices);
+            } catch (error) {
+                statusText.textContent = "Could not load devices";
+            }
+        }
+
         scanButton.addEventListener("click", async () => {
             scanButton.disabled = true;
             scanButton.textContent = "Scanning...";
@@ -86,55 +172,18 @@
 
                 const devices = await response.json();
 
-                // Sort devices by IP address
-                devices.sort((a, b) => {
-                    const aParts = a.ip.split(".").map(Number);
-                    const bParts = b.ip.split(".").map(Number);
-
-                    for (let i = 0; i < 4; i++) {
-                        if (aParts[i] !== bParts[i]) {
-                            return aParts[i] - bParts[i];
-                        }
-                    }
-
-                    return 0;
-                });
-
-                deviceList.innerHTML = "";
-
-                devices.forEach(device => {
-                    const row = document.createElement("tr");
-
-                    const ipCell = document.createElement("td");
-                    ipCell.textContent = device.ip;
-
-                    const macCell = document.createElement("td");
-                    macCell.textContent = device.mac;
-
-                    row.append(ipCell, macCell);
-                    deviceList.appendChild(row);
-                });
-
-                if (devices.length === 0) {
-                    deviceList.innerHTML = `
-                        <tr>
-                            <td colspan="2" class="empty-state">
-                                No active devices found.
-                            </td>
-                        </tr>
-                    `;
-                }
-
-                deviceCount.textContent = devices.length;
+                // Refresh the table with saved results
+                displayDevices(devices);
                 statusText.textContent = "Scan complete";
             } catch (error) {
                 statusText.textContent = "Scan failed";
-                deviceCount.textContent = "0";
             } finally {
                 scanButton.disabled = false;
                 scanButton.textContent = "Scan Network";
             }
         });
+
+        loadDevices();
     </script>
 </body>
 </html>
