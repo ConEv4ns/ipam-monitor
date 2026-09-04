@@ -54,13 +54,16 @@
                             <th>Status</th>
                             <th>IP Address</th>
                             <th>MAC Address</th>
+                            <th>Name</th>
+                            <th>Type</th>
                             <th>Trust</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
 
                     <tbody id="device-list">
                         <tr>
-                            <td colspan="4" class="empty-state">
+                            <td colspan="7" class="empty-state">
                                 Run a scan to discover devices.
                             </td>
                         </tr>
@@ -70,14 +73,87 @@
         </section>
     </main>
 
+    <div id="edit-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-heading">
+                <div>
+                    <p class="eyebrow">DEVICE MANAGEMENT</p>
+                    <h2>Edit Device</h2>
+                </div>
+
+                <button id="close-modal" class="close-button" type="button">
+                    Close
+                </button>
+            </div>
+
+            <form id="edit-form">
+                <input id="device-id" type="hidden">
+
+                <label for="device-name">Device name</label>
+                <input
+                    id="device-name"
+                    name="name"
+                    type="text"
+                    maxlength="80"
+                    placeholder="Example: Living Room Laptop"
+                >
+
+                <label for="device-type">Device type</label>
+                <input
+                    id="device-type"
+                    name="device_type"
+                    type="text"
+                    maxlength="50"
+                    placeholder="Example: Laptop"
+                >
+
+                <label for="trust-status">Trust status</label>
+                <select id="trust-status" name="trust_status">
+                    <option value="unknown">Unknown</option>
+                    <option value="trusted">Trusted</option>
+                    <option value="untrusted">Untrusted</option>
+                </select>
+
+                <label for="device-notes">Notes</label>
+                <textarea
+                    id="device-notes"
+                    name="notes"
+                    maxlength="500"
+                    rows="5"
+                    placeholder="Add notes about this device"
+                ></textarea>
+
+                <p id="form-message" class="form-message"></p>
+
+                <div class="form-actions">
+                    <button id="cancel-edit" class="secondary-button" type="button">
+                        Cancel
+                    </button>
+
+                    <button id="save-device" type="submit">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const scanButton = document.getElementById("scan-button");
         const statusText = document.getElementById("status");
         const deviceCount = document.getElementById("device-count");
         const deviceList = document.getElementById("device-list");
 
+        const editModal = document.getElementById("edit-modal");
+        const editForm = document.getElementById("edit-form");
+        const closeModalButton = document.getElementById("close-modal");
+        const cancelEditButton = document.getElementById("cancel-edit");
+        const formMessage = document.getElementById("form-message");
+
+        let savedDevices = [];
+
         function sortDevices(devices) {
-            return devices.sort((a, b) => {
+            return [...devices].sort((a, b) => {
                 const aParts = a.ip_address.split(".").map(Number);
                 const bParts = b.ip_address.split(".").map(Number);
 
@@ -91,14 +167,28 @@
             });
         }
 
+        function createBadge(text, className) {
+            const badge = document.createElement("span");
+            badge.className = className;
+            badge.textContent = text;
+            return badge;
+        }
+
+        function createTextCell(text) {
+            const cell = document.createElement("td");
+            cell.textContent = text || "Not set";
+            return cell;
+        }
+
         function displayDevices(devices) {
+            savedDevices = devices;
             deviceList.innerHTML = "";
 
             if (devices.length === 0) {
                 const row = document.createElement("tr");
                 const cell = document.createElement("td");
 
-                cell.colSpan = 4;
+                cell.colSpan = 7;
                 cell.className = "empty-state";
                 cell.textContent = "No saved devices found.";
 
@@ -112,35 +202,74 @@
                 const row = document.createElement("tr");
 
                 const statusCell = document.createElement("td");
-                const statusBadge = document.createElement("span");
-
-                statusBadge.className = device.online
-                    ? "status-badge online"
-                    : "status-badge offline";
-
-                statusBadge.textContent = device.online ? "Online" : "Offline";
-                statusCell.appendChild(statusBadge);
-
-                const ipCell = document.createElement("td");
-                ipCell.textContent = device.ip_address;
-
-                const macCell = document.createElement("td");
-                macCell.textContent = device.mac_address;
+                statusCell.appendChild(
+                    createBadge(
+                        device.online ? "Online" : "Offline",
+                        device.online
+                            ? "status-badge online"
+                            : "status-badge offline"
+                    )
+                );
 
                 const trustCell = document.createElement("td");
-                const trustBadge = document.createElement("span");
+                trustCell.appendChild(
+                    createBadge(
+                        device.trust_status,
+                        `trust-badge ${device.trust_status}`
+                    )
+                );
 
-                trustBadge.className = `trust-badge ${device.trust_status}`;
-                trustBadge.textContent = device.trust_status;
+                const actionsCell = document.createElement("td");
+                const editButton = document.createElement("button");
 
-                trustCell.appendChild(trustBadge);
+                editButton.type = "button";
+                editButton.className = "edit-button";
+                editButton.textContent = "Edit";
+                editButton.addEventListener("click", () => openEditor(device.id));
 
-                row.append(statusCell, ipCell, macCell, trustCell);
+                actionsCell.appendChild(editButton);
+
+                row.append(
+                    statusCell,
+                    createTextCell(device.ip_address),
+                    createTextCell(device.mac_address),
+                    createTextCell(device.name),
+                    createTextCell(device.device_type),
+                    trustCell,
+                    actionsCell
+                );
+
                 deviceList.appendChild(row);
             });
 
             const onlineCount = devices.filter(device => device.online).length;
             deviceCount.textContent = onlineCount;
+        }
+
+        function openEditor(deviceId) {
+            const device = savedDevices.find(item => item.id === deviceId);
+
+            if (!device) {
+                return;
+            }
+
+            document.getElementById("device-id").value = device.id;
+            document.getElementById("device-name").value = device.name || "";
+            document.getElementById("device-type").value =
+                device.device_type || "";
+            document.getElementById("trust-status").value =
+                device.trust_status;
+            document.getElementById("device-notes").value =
+                device.notes || "";
+
+            formMessage.textContent = "";
+            editModal.classList.remove("hidden");
+        }
+
+        function closeEditor() {
+            editModal.classList.add("hidden");
+            editForm.reset();
+            formMessage.textContent = "";
         }
 
         async function loadDevices() {
@@ -180,6 +309,56 @@
             } finally {
                 scanButton.disabled = false;
                 scanButton.textContent = "Scan Network";
+            }
+        });
+
+        editForm.addEventListener("submit", async event => {
+            event.preventDefault();
+
+            const deviceId = document.getElementById("device-id").value;
+            const saveButton = document.getElementById("save-device");
+
+            const deviceDetails = {
+                name: document.getElementById("device-name").value,
+                device_type: document.getElementById("device-type").value,
+                trust_status: document.getElementById("trust-status").value,
+                notes: document.getElementById("device-notes").value
+            };
+
+            saveButton.disabled = true;
+            formMessage.textContent = "Saving...";
+
+            try {
+                const response = await fetch(`/devices/${deviceId}`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(deviceDetails)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || "Update failed");
+                }
+
+                await loadDevices();
+                closeEditor();
+                statusText.textContent = "Device updated";
+            } catch (error) {
+                formMessage.textContent = error.message;
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        closeModalButton.addEventListener("click", closeEditor);
+        cancelEditButton.addEventListener("click", closeEditor);
+
+        editModal.addEventListener("click", event => {
+            if (event.target === editModal) {
+                closeEditor();
             }
         });
 

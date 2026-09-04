@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 DATABASE_PATH = Path(__file__).parent / "ipam.db"
+TRUST_STATUSES = {"trusted", "unknown", "untrusted"}
 
 
 def get_connection():
@@ -48,7 +49,7 @@ def save_scan(devices):
     timestamp = current_time()
 
     with get_connection() as connection:
-        # Mark previously saved devices offline
+        # Reset status before processing replies
         connection.execute("UPDATE devices SET online = 0")
 
         for device in devices:
@@ -72,7 +73,7 @@ def save_scan(devices):
                 timestamp
             ))
 
-        # Record the completed scan
+        # Store scan history
         connection.execute("""
             INSERT INTO scans (
                 started_at,
@@ -107,6 +108,66 @@ def get_devices():
         """).fetchall()
 
     return [dict(row) for row in rows]
+
+
+def get_device(device_id):
+    with get_connection() as connection:
+        row = connection.execute("""
+            SELECT
+                id,
+                ip_address,
+                mac_address,
+                name,
+                device_type,
+                notes,
+                trust_status,
+                online,
+                first_seen,
+                last_seen
+            FROM devices
+            WHERE id = ?
+        """, (device_id,)).fetchone()
+
+    return dict(row) if row else None
+
+
+def update_device(device_id, name, device_type, notes, trust_status):
+    name = name.strip()
+    device_type = device_type.strip()
+    notes = notes.strip()
+    trust_status = trust_status.strip().lower()
+
+    # Validate editable fields
+    if len(name) > 80:
+        raise ValueError("Device name must be 80 characters or fewer.")
+
+    if len(device_type) > 50:
+        raise ValueError("Device type must be 50 characters or fewer.")
+
+    if len(notes) > 500:
+        raise ValueError("Notes must be 500 characters or fewer.")
+
+    if trust_status not in TRUST_STATUSES:
+        raise ValueError("Invalid trust status.")
+
+    with get_connection() as connection:
+        cursor = connection.execute("""
+            UPDATE devices
+            SET
+                name = ?,
+                device_type = ?,
+                notes = ?,
+                trust_status = ?
+            WHERE id = ?
+        """, (
+            name or None,
+            device_type or None,
+            notes or None,
+            trust_status,
+            device_id
+        ))
+
+    return cursor.rowcount == 1
 
 
 if __name__ == "__main__":
