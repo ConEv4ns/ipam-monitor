@@ -1,4 +1,7 @@
-from flask import Flask, jsonify, render_template, request
+import csv
+from io import StringIO
+
+from flask import Flask, Response, jsonify, render_template, request
 
 from database import (
     current_time,
@@ -81,9 +84,60 @@ def scan():
 
         return jsonify(get_devices())
     except Exception:
-        # Record failed scans without exposing internal errors
+        # Record failures without exposing internal errors
         save_failed_scan(started_at)
         return jsonify({"error": "Network scan failed."}), 500
+
+
+@app.route("/export/devices.csv")
+def export_devices():
+    devices = get_devices()
+    output = StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "IP Address",
+        "MAC Address",
+        "Device Name",
+        "Device Type",
+        "Trust Status",
+        "Online Status",
+        "First Seen",
+        "Last Seen",
+        "Notes"
+    ])
+
+    for device in devices:
+        writer.writerow([
+            device["ip_address"],
+            device["mac_address"],
+            safe_csv_value(device["name"]),
+            safe_csv_value(device["device_type"]),
+            device["trust_status"],
+            "Online" if device["online"] else "Offline",
+            device["first_seen"],
+            device["last_seen"],
+            safe_csv_value(device["notes"])
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition":
+                "attachment; filename=ipam_devices.csv"
+        }
+    )
+
+
+def safe_csv_value(value):
+    value = value or ""
+
+    # Prevent spreadsheet formula injection
+    if value.startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+
+    return value
 
 
 if __name__ == "__main__":

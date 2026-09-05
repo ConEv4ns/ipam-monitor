@@ -3,20 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-   <title>IPAM Monitor</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <title>IPAM Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
     <main class="container">
-       <nav class="page-navigation" aria-label="Main navigation">
-    <a href="/">Dashboard</a>
-    <a href="/history">Scan History</a>
-</nav>
 
+        <!-- Navigation -->
+        <nav class="page-navigation" aria-label="Main navigation">
+            <a href="/">Dashboard</a>
+            <a href="/history">Scan History</a>
+        </nav>
+
+        <!-- Header -->
         <header>
             <div>
                 <p class="eyebrow">NETWORK MANAGEMENT</p>
+
                 <h1>IPAM Monitor</h1>
 
                 <p class="subtitle">
@@ -24,11 +29,18 @@
                 </p>
             </div>
 
-            <button id="scan-button" type="button">
-                Scan Network
-            </button>
+            <div class="header-actions">
+                <a href="/export/devices.csv" class="secondary-button">
+                    Export CSV
+                </a>
+
+                <button id="scan-button" type="button">
+                    Scan Network
+                </button>
+            </div>
         </header>
 
+        <!-- Summary -->
         <section class="summary">
             <div class="summary-card">
                 <span class="summary-label">Status</span>
@@ -46,6 +58,7 @@
             </div>
         </section>
 
+        <!-- Devices -->
         <section class="dashboard">
             <div class="dashboard-heading">
                 <div>
@@ -54,6 +67,7 @@
                 </div>
             </div>
 
+            <!-- Filters -->
             <div class="filters">
                 <div class="search-field">
                     <label for="search-input">Search devices</label>
@@ -121,6 +135,7 @@
                 <span id="results-count">Showing 0 devices</span>
             </div>
 
+            <!-- Device table -->
             <div class="table-container">
                 <table>
                     <thead>
@@ -147,8 +162,10 @@
         </section>
     </main>
 
+    <!-- Edit modal -->
     <div id="edit-modal" class="modal hidden">
         <div class="modal-content">
+
             <div class="modal-heading">
                 <div>
                     <p class="eyebrow">DEVICE MANAGEMENT</p>
@@ -235,72 +252,74 @@
         const statusFilter = document.getElementById("status-filter");
         const trustFilter = document.getElementById("trust-filter");
         const sortSelect = document.getElementById("sort-select");
-        const clearFiltersButton = document.getElementById(
-            "clear-filters"
-        );
+        const clearFilters = document.getElementById("clear-filters");
 
         const editModal = document.getElementById("edit-modal");
         const editForm = document.getElementById("edit-form");
-        const closeModalButton = document.getElementById("close-modal");
-        const cancelEditButton = document.getElementById("cancel-edit");
+        const closeModal = document.getElementById("close-modal");
+        const cancelEdit = document.getElementById("cancel-edit");
         const formMessage = document.getElementById("form-message");
 
         let savedDevices = [];
 
-        function compareIpAddresses(firstIp, secondIp) {
-            const firstParts = firstIp.split(".").map(Number);
-            const secondParts = secondIp.split(".").map(Number);
+        // Sort IP addresses
+        function compareIpAddresses(a, b) {
+            const aParts = a.split(".").map(Number);
+            const bParts = b.split(".").map(Number);
 
-            for (let index = 0; index < 4; index++) {
-                if (firstParts[index] !== secondParts[index]) {
-                    return firstParts[index] - secondParts[index];
+            for (let i = 0; i < 4; i++) {
+                if (aParts[i] !== bParts[i]) {
+                    return aParts[i] - bParts[i];
                 }
             }
 
             return 0;
         }
 
+        // Sort devices
         function sortDevices(devices) {
-            const sortedDevices = [...devices];
+            const sorted = [...devices];
 
-            sortedDevices.sort((firstDevice, secondDevice) => {
+            sorted.sort((a, b) => {
                 if (sortSelect.value === "ip-descending") {
                     return compareIpAddresses(
-                        secondDevice.ip_address,
-                        firstDevice.ip_address
+                        b.ip_address,
+                        a.ip_address
                     );
                 }
 
                 if (sortSelect.value === "name-ascending") {
-                    return (firstDevice.name || "").localeCompare(
-                        secondDevice.name || ""
+                    return (a.name || "").localeCompare(
+                        b.name || ""
                     );
                 }
 
                 if (sortSelect.value === "name-descending") {
-                    return (secondDevice.name || "").localeCompare(
-                        firstDevice.name || ""
+                    return (b.name || "").localeCompare(
+                        a.name || ""
                     );
                 }
 
                 return compareIpAddresses(
-                    firstDevice.ip_address,
-                    secondDevice.ip_address
+                    a.ip_address,
+                    b.ip_address
                 );
             });
 
-            return sortedDevices;
+            return sorted;
         }
 
+        // Create badge
         function createBadge(text, className) {
             const badge = document.createElement("span");
 
             badge.className = className;
-            badge.textContent = text;
+            badge.textContent = text || "Unknown";
 
             return badge;
         }
 
+        // Create cell
         function createTextCell(text) {
             const cell = document.createElement("td");
 
@@ -309,6 +328,7 @@
             return cell;
         }
 
+        // Display devices
         function displayDevices(devices) {
             deviceList.innerHTML = "";
 
@@ -321,9 +341,11 @@
 
                 cell.colSpan = 7;
                 cell.className = "empty-state";
-                cell.textContent = savedDevices.length
-                    ? "No devices match the selected filters."
-                    : "No saved devices found.";
+
+                cell.textContent =
+                    savedDevices.length
+                        ? "No devices match the selected filters."
+                        : "No saved devices found.";
 
                 row.appendChild(cell);
                 deviceList.appendChild(row);
@@ -334,6 +356,7 @@
             devices.forEach(device => {
                 const row = document.createElement("tr");
 
+                // Status
                 const statusCell = document.createElement("td");
 
                 statusCell.appendChild(
@@ -345,25 +368,33 @@
                     )
                 );
 
+                // Trust
                 const trustCell = document.createElement("td");
+                const trustStatus =
+                    device.trust_status || "unknown";
 
                 trustCell.appendChild(
                     createBadge(
-                        device.trust_status,
-                        `trust-badge ${device.trust_status}`
+                        trustStatus,
+                        `trust-badge ${trustStatus}`
                     )
                 );
 
-                const actionsCell = document.createElement("td");
-                const editButton = document.createElement("button");
+                // Actions
+                const actionsCell =
+                    document.createElement("td");
+
+                const editButton =
+                    document.createElement("button");
 
                 editButton.type = "button";
                 editButton.className = "edit-button";
                 editButton.textContent = "Edit";
 
-                editButton.addEventListener("click", () => {
-                    openEditor(device.id);
-                });
+                editButton.addEventListener(
+                    "click",
+                    () => openEditor(device.id)
+                );
 
                 actionsCell.appendChild(editButton);
 
@@ -381,201 +412,339 @@
             });
         }
 
+        // Apply filters
         function filterDevices() {
-            const searchTerm = searchInput.value.trim().toLowerCase();
-            const selectedStatus = statusFilter.value;
-            const selectedTrust = trustFilter.value;
+            const searchTerm =
+                searchInput.value.trim().toLowerCase();
 
-            const filteredDevices = savedDevices.filter(device => {
-                const searchableValues = [
-                    device.ip_address,
-                    device.mac_address,
-                    device.name,
-                    device.device_type,
-                    device.notes
-                ]
-                    .filter(Boolean)
-                    .join(" ")
-                    .toLowerCase();
+            const selectedStatus =
+                statusFilter.value;
 
-                const matchesSearch =
-                    searchableValues.includes(searchTerm);
+            const selectedTrust =
+                trustFilter.value;
 
-                const matchesStatus =
-                    selectedStatus === "all" ||
-                    (selectedStatus === "online" && device.online) ||
-                    (selectedStatus === "offline" && !device.online);
+            const filteredDevices =
+                savedDevices.filter(device => {
+                    const searchableValues = [
+                        device.ip_address,
+                        device.mac_address,
+                        device.name,
+                        device.device_type,
+                        device.notes
+                    ]
+                        .filter(Boolean)
+                        .join(" ")
+                        .toLowerCase();
 
-                const matchesTrust =
-                    selectedTrust === "all" ||
-                    device.trust_status === selectedTrust;
+                    const matchesSearch =
+                        !searchTerm ||
+                        searchableValues.includes(searchTerm);
 
-                return matchesSearch &&
-                    matchesStatus &&
-                    matchesTrust;
-            });
+                    const matchesStatus =
+                        selectedStatus === "all" ||
+                        (
+                            selectedStatus === "online" &&
+                            device.online
+                        ) ||
+                        (
+                            selectedStatus === "offline" &&
+                            !device.online
+                        );
 
-            displayDevices(sortDevices(filteredDevices));
+                    const matchesTrust =
+                        selectedTrust === "all" ||
+                        device.trust_status === selectedTrust;
+
+                    return (
+                        matchesSearch &&
+                        matchesStatus &&
+                        matchesTrust
+                    );
+                });
+
+            displayDevices(
+                sortDevices(filteredDevices)
+            );
         }
 
+        // Set devices
         function setDevices(devices) {
-            savedDevices = devices;
+            savedDevices =
+                Array.isArray(devices)
+                    ? devices
+                    : [];
 
-            const onlineCount = savedDevices.filter(
-                device => device.online
-            ).length;
+            const onlineCount =
+                savedDevices.filter(
+                    device => device.online
+                ).length;
 
             deviceCount.textContent = onlineCount;
 
             filterDevices();
         }
 
+        // Open editor
         function openEditor(deviceId) {
-            const device = savedDevices.find(
-                item => item.id === deviceId
-            );
+            const device =
+                savedDevices.find(
+                    item => item.id === deviceId
+                );
 
             if (!device) {
                 return;
             }
 
-            document.getElementById("device-id").value = device.id;
-            document.getElementById("device-name").value =
-                device.name || "";
-            document.getElementById("device-type").value =
-                device.device_type || "";
-            document.getElementById("trust-status").value =
-                device.trust_status;
-            document.getElementById("device-notes").value =
-                device.notes || "";
+            document.getElementById(
+                "device-id"
+            ).value = device.id;
+
+            document.getElementById(
+                "device-name"
+            ).value = device.name || "";
+
+            document.getElementById(
+                "device-type"
+            ).value = device.device_type || "";
+
+            document.getElementById(
+                "trust-status"
+            ).value =
+                device.trust_status || "unknown";
+
+            document.getElementById(
+                "device-notes"
+            ).value = device.notes || "";
 
             formMessage.textContent = "";
+
             editModal.classList.remove("hidden");
         }
 
+        // Close editor
         function closeEditor() {
             editModal.classList.add("hidden");
             editForm.reset();
             formMessage.textContent = "";
         }
 
+        // Load devices
         async function loadDevices() {
             try {
-                const response = await fetch("/devices");
-                const result = await response.json();
+                const response =
+                    await fetch("/devices");
 
-                if (!response.ok || !Array.isArray(result)) {
-                    throw new Error("Device request failed");
+                const result =
+                    await response.json();
+
+                if (
+                    !response.ok ||
+                    !Array.isArray(result)
+                ) {
+                    throw new Error(
+                        "Device request failed"
+                    );
                 }
 
                 setDevices(result);
+
             } catch (error) {
-                statusText.textContent = "Could not load devices";
+                statusText.textContent =
+                    "Could not load devices";
             }
         }
 
-        scanButton.addEventListener("click", async () => {
-            scanButton.disabled = true;
-            scanButton.textContent = "Scanning...";
-            statusText.textContent = "Scanning";
+        // Scan network
+        scanButton.addEventListener(
+            "click",
+            async () => {
+                scanButton.disabled = true;
+                scanButton.textContent = "Scanning...";
+                statusText.textContent = "Scanning";
 
-            try {
-                const response = await fetch("/scan");
-                const result = await response.json();
+                try {
+                    const response =
+                        await fetch("/scan");
 
-                if (!response.ok) {
-                    throw new Error(result.error || "Scan failed");
+                    const result =
+                        await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(
+                            result.error || "Scan failed"
+                        );
+                    }
+
+                    setDevices(result);
+
+                    statusText.textContent =
+                        "Scan complete";
+
+                } catch (error) {
+                    statusText.textContent =
+                        error.message || "Scan failed";
+
+                } finally {
+                    scanButton.disabled = false;
+                    scanButton.textContent =
+                        "Scan Network";
                 }
-
-                // Refresh the dashboard with saved results
-                setDevices(result);
-                statusText.textContent = "Scan complete";
-            } catch (error) {
-                statusText.textContent = error.message;
-            } finally {
-                scanButton.disabled = false;
-                scanButton.textContent = "Scan Network";
             }
-        });
+        );
 
-        editForm.addEventListener("submit", async event => {
-            event.preventDefault();
+        // Save device
+        editForm.addEventListener(
+            "submit",
+            async event => {
+                event.preventDefault();
 
-            const deviceId =
-                document.getElementById("device-id").value;
+                const deviceId =
+                    document.getElementById(
+                        "device-id"
+                    ).value;
 
-            const saveButton =
-                document.getElementById("save-device");
+                const saveButton =
+                    document.getElementById(
+                        "save-device"
+                    );
 
-            const deviceDetails = {
-                name: document.getElementById("device-name").value,
-                device_type:
-                    document.getElementById("device-type").value,
-                trust_status:
-                    document.getElementById("trust-status").value,
-                notes: document.getElementById("device-notes").value
-            };
+                const deviceDetails = {
+                    name:
+                        document.getElementById(
+                            "device-name"
+                        ).value,
 
-            saveButton.disabled = true;
-            formMessage.textContent = "Saving...";
+                    device_type:
+                        document.getElementById(
+                            "device-type"
+                        ).value,
 
-            try {
-                const response = await fetch(`/devices/${deviceId}`, {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(deviceDetails)
-                });
+                    trust_status:
+                        document.getElementById(
+                            "trust-status"
+                        ).value,
 
-                const result = await response.json();
+                    notes:
+                        document.getElementById(
+                            "device-notes"
+                        ).value
+                };
 
-                if (!response.ok) {
-                    throw new Error(result.error || "Update failed");
+                saveButton.disabled = true;
+                formMessage.textContent = "Saving...";
+
+                try {
+                    const response =
+                        await fetch(
+                            `/devices/${deviceId}`,
+                            {
+                                method: "PATCH",
+                                headers: {
+                                    "Content-Type":
+                                        "application/json"
+                                },
+                                body:
+                                    JSON.stringify(
+                                        deviceDetails
+                                    )
+                            }
+                        );
+
+                    const result =
+                        await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(
+                            result.error ||
+                            "Update failed"
+                        );
+                    }
+
+                    await loadDevices();
+
+                    closeEditor();
+
+                    statusText.textContent =
+                        "Device updated";
+
+                } catch (error) {
+                    formMessage.textContent =
+                        error.message ||
+                        "Update failed";
+
+                } finally {
+                    saveButton.disabled = false;
                 }
-
-                await loadDevices();
-                closeEditor();
-                statusText.textContent = "Device updated";
-            } catch (error) {
-                formMessage.textContent = error.message;
-            } finally {
-                saveButton.disabled = false;
             }
-        });
+        );
 
-        searchInput.addEventListener("input", filterDevices);
-        statusFilter.addEventListener("change", filterDevices);
-        trustFilter.addEventListener("change", filterDevices);
-        sortSelect.addEventListener("change", filterDevices);
+        // Filters
+        searchInput.addEventListener(
+            "input",
+            filterDevices
+        );
 
-        clearFiltersButton.addEventListener("click", () => {
-            searchInput.value = "";
-            statusFilter.value = "all";
-            trustFilter.value = "all";
-            sortSelect.value = "ip-ascending";
+        statusFilter.addEventListener(
+            "change",
+            filterDevices
+        );
 
-            filterDevices();
-        });
+        trustFilter.addEventListener(
+            "change",
+            filterDevices
+        );
 
-        closeModalButton.addEventListener("click", closeEditor);
-        cancelEditButton.addEventListener("click", closeEditor);
+        sortSelect.addEventListener(
+            "change",
+            filterDevices
+        );
 
-        editModal.addEventListener("click", event => {
-            if (event.target === editModal) {
-                closeEditor();
+        // Clear filters
+        clearFilters.addEventListener(
+            "click",
+            () => {
+                searchInput.value = "";
+                statusFilter.value = "all";
+                trustFilter.value = "all";
+                sortSelect.value = "ip-ascending";
+
+                filterDevices();
             }
-        });
+        );
 
-        document.addEventListener("keydown", event => {
-            if (
-                event.key === "Escape" &&
-                !editModal.classList.contains("hidden")
-            ) {
-                closeEditor();
+        // Modal controls
+        closeModal.addEventListener(
+            "click",
+            closeEditor
+        );
+
+        cancelEdit.addEventListener(
+            "click",
+            closeEditor
+        );
+
+        editModal.addEventListener(
+            "click",
+            event => {
+                if (event.target === editModal) {
+                    closeEditor();
+                }
             }
-        });
+        );
 
+        document.addEventListener(
+            "keydown",
+            event => {
+                if (
+                    event.key === "Escape" &&
+                    !editModal.classList.contains("hidden")
+                ) {
+                    closeEditor();
+                }
+            }
+        );
+
+        // Initial load
         loadDevices();
     </script>
 </body>
