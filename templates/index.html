@@ -15,6 +15,7 @@
         <nav class="page-navigation" aria-label="Main navigation">
             <a href="/">Dashboard</a>
             <a href="/history">Scan History</a>
+            <a href="/settings">Settings</a>
         </nav>
 
         <!-- Header -->
@@ -54,7 +55,7 @@
 
             <div class="summary-card">
                 <span class="summary-label">Network</span>
-                <strong>192.168.1.0/24</strong>
+                <strong id="network-range-display">Loading...</strong>
             </div>
         </section>
 
@@ -554,6 +555,19 @@
             }
         }
 
+        // Show the currently configured network range from Settings
+        async function loadNetworkRange() {
+            try {
+                const response = await fetch("/api/settings");
+                const result = await response.json();
+
+                document.getElementById("network-range-display").textContent =
+                    response.ok ? result.network_range : "Unknown";
+            } catch (error) {
+                document.getElementById("network-range-display").textContent = "Unknown";
+            }
+        }
+
         // Scan network
         scanButton.addEventListener(
             "click",
@@ -746,6 +760,7 @@
 
         // Initial load
         loadDevices();
+        loadNetworkRange();
     </script>
 </body>
 </html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Settings | IPAM Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="container">
+        <nav class="page-navigation" aria-label="Main navigation">
+            <a href="/">Dashboard</a>
+            <a href="/history">Scan History</a>
+            <a href="/settings">Settings</a>
+        </nav>
+
+        <header>
+            <div>
+                <p class="eyebrow">NETWORK MANAGEMENT</p>
+                <h1>Settings</h1>
+
+                <p class="subtitle">
+                    Configure the authorised network range and scan timeout.
+                </p>
+            </div>
+        </header>
+
+        <section class="settings-layout">
+            <section class="settings-panel">
+                <div class="dashboard-heading">
+                    <div>
+                        <h2>Scanner Configuration</h2>
+                        <p>Changes apply to future network scans.</p>
+                    </div>
+                </div>
+
+                <form id="settings-form" class="settings-form">
+                    <div class="settings-field">
+                        <label for="network-range">Network range</label>
+
+                        <input
+                            id="network-range"
+                            name="network_range"
+                            type="text"
+                            maxlength="18"
+                            placeholder="192.168.1.0/24"
+                            required
+                        >
+
+                        <p class="field-help">
+                            Enter an authorised private IPv4 range no larger
+                            than /24.
+                        </p>
+                    </div>
+
+                    <div class="settings-field">
+                        <label for="scan-timeout">Scan timeout</label>
+
+                        <input
+                            id="scan-timeout"
+                            name="scan_timeout"
+                            type="number"
+                            min="1"
+                            max="10"
+                            step="1"
+                            required
+                        >
+
+                        <p class="field-help">
+                            Choose how many seconds Scapy waits for replies.
+                        </p>
+                    </div>
+
+                    <p
+                        id="settings-message"
+                        class="settings-message"
+                        role="status"
+                    ></p>
+
+                    <div class="form-actions">
+                        <button
+                            id="reset-settings"
+                            class="secondary-button"
+                            type="button"
+                        >
+                            Reset Form
+                        </button>
+
+                        <button id="save-settings" type="submit">
+                            Save Settings
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <aside class="settings-information">
+                <p class="eyebrow">CURRENT CONFIGURATION</p>
+
+                <div class="configuration-item">
+                    <span>Network</span>
+                    <strong id="current-network">Loading...</strong>
+                </div>
+
+                <div class="configuration-item">
+                    <span>Timeout</span>
+                    <strong id="current-timeout">Loading...</strong>
+                </div>
+
+                <div class="settings-notice">
+                    <strong>Authorised use only</strong>
+
+                    <p>
+                        Only scan networks that you own or have permission
+                        to test.
+                    </p>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <script>
+        const settingsForm = document.getElementById("settings-form");
+        const networkRangeInput = document.getElementById("network-range");
+        const scanTimeoutInput = document.getElementById("scan-timeout");
+        const settingsMessage = document.getElementById("settings-message");
+        const saveButton = document.getElementById("save-settings");
+        const resetButton = document.getElementById("reset-settings");
+        const currentNetwork = document.getElementById("current-network");
+        const currentTimeout = document.getElementById("current-timeout");
+
+        let savedSettings = null;
+
+        function displaySettings(settings) {
+            savedSettings = settings;
+
+            networkRangeInput.value = settings.network_range;
+            scanTimeoutInput.value = settings.scan_timeout;
+
+            currentNetwork.textContent = settings.network_range;
+            currentTimeout.textContent = `${settings.scan_timeout} seconds`;
+        }
+
+        async function loadSettings() {
+            settingsMessage.className = "settings-message";
+            settingsMessage.textContent = "Loading settings...";
+
+            try {
+                const response = await fetch("/api/settings");
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || "Could not load settings.");
+                }
+
+                displaySettings(result);
+                settingsMessage.textContent = "";
+            } catch (error) {
+                settingsMessage.className = "settings-message error-message";
+                settingsMessage.textContent = error.message;
+            }
+        }
+
+        settingsForm.addEventListener("submit", async event => {
+            event.preventDefault();
+
+            const updatedSettings = {
+                network_range: networkRangeInput.value.trim(),
+                scan_timeout: Number(scanTimeoutInput.value)
+            };
+
+            saveButton.disabled = true;
+            saveButton.textContent = "Saving...";
+            settingsMessage.className = "settings-message";
+            settingsMessage.textContent = "Saving settings...";
+
+            try {
+                const response = await fetch("/api/settings", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updatedSettings)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || "Could not save settings.");
+                }
+
+                // Keep form and summary in sync with what was actually saved
+                displaySettings(result);
+
+                settingsMessage.className = "settings-message success-message";
+                settingsMessage.textContent = "Settings saved successfully.";
+            } catch (error) {
+                settingsMessage.className = "settings-message error-message";
+                settingsMessage.textContent = error.message;
+            } finally {
+                saveButton.disabled = false;
+                saveButton.textContent = "Save Settings";
+            }
+        });
+
+        resetButton.addEventListener("click", () => {
+            if (!savedSettings) {
+                return;
+            }
+
+            networkRangeInput.value = savedSettings.network_range;
+            scanTimeoutInput.value = savedSettings.scan_timeout;
+            settingsMessage.className = "settings-message";
+            settingsMessage.textContent = "Unsaved changes cleared.";
+        });
+
+        loadSettings();
+    </script>
+</body>
+</html>

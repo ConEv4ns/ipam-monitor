@@ -6,6 +6,11 @@ from pathlib import Path
 DATABASE_PATH = Path(__file__).parent / "ipam.db"
 TRUST_STATUSES = {"trusted", "unknown", "untrusted"}
 
+DEFAULT_SETTINGS = {
+    "network_range": "192.168.1.0/24",
+    "scan_timeout": "3"
+}
+
 
 def get_connection():
     connection = sqlite3.connect(DATABASE_PATH)
@@ -44,12 +49,32 @@ def initialise_database():
             )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL
+            )
+        """)
+
+        # Add defaults without replacing saved settings
+        for setting_key, setting_value in DEFAULT_SETTINGS.items():
+            connection.execute("""
+                INSERT OR IGNORE INTO settings (
+                    setting_key,
+                    setting_value
+                )
+                VALUES (?, ?)
+            """, (
+                setting_key,
+                setting_value
+            ))
+
 
 def save_scan(devices):
     timestamp = current_time()
 
     with get_connection() as connection:
-        # Reset device status before processing replies
+        # Reset status before processing replies
         connection.execute("UPDATE devices SET online = 0")
 
         for device in devices:
@@ -157,13 +182,19 @@ def update_device(device_id, name, device_type, notes, trust_status):
 
     # Validate editable fields
     if len(name) > 80:
-        raise ValueError("Device name must be 80 characters or fewer.")
+        raise ValueError(
+            "Device name must be 80 characters or fewer."
+        )
 
     if len(device_type) > 50:
-        raise ValueError("Device type must be 50 characters or fewer.")
+        raise ValueError(
+            "Device type must be 50 characters or fewer."
+        )
 
     if len(notes) > 500:
-        raise ValueError("Notes must be 500 characters or fewer.")
+        raise ValueError(
+            "Notes must be 500 characters or fewer."
+        )
 
     if trust_status not in TRUST_STATUSES:
         raise ValueError("Invalid trust status.")
@@ -189,7 +220,7 @@ def update_device(device_id, name, device_type, notes, trust_status):
 
 
 def get_scan_history(limit=50):
-    # Limit history results to a safe range
+    # Keep history requests within a safe range
     limit = max(1, min(limit, 200))
 
     with get_connection() as connection:
@@ -206,6 +237,59 @@ def get_scan_history(limit=50):
         """, (limit,)).fetchall()
 
     return [dict(row) for row in rows]
+
+
+def get_settings():
+    with get_connection() as connection:
+        rows = connection.execute("""
+            SELECT
+                setting_key,
+                setting_value
+            FROM settings
+        """).fetchall()
+
+    settings = {
+        row["setting_key"]: row["setting_value"]
+        for row in rows
+    }
+
+    return {
+        "network_range": settings.get(
+            "network_range",
+            DEFAULT_SETTINGS["network_range"]
+        ),
+        "scan_timeout": int(
+            settings.get(
+                "scan_timeout",
+                DEFAULT_SETTINGS["scan_timeout"]
+            )
+        )
+    }
+
+
+def update_settings(network_range, scan_timeout):
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO settings (
+                setting_key,
+                setting_value
+            )
+            VALUES ('network_range', ?)
+            ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value = excluded.setting_value
+        """, (network_range,))
+
+        connection.execute("""
+            INSERT INTO settings (
+                setting_key,
+                setting_value
+            )
+            VALUES ('scan_timeout', ?)
+            ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value = excluded.setting_value
+        """, (str(scan_timeout),))
+
+    return get_settings()
 
 
 if __name__ == "__main__":

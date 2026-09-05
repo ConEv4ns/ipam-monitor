@@ -15,6 +15,7 @@
         <nav class="page-navigation" aria-label="Main navigation">
             <a href="/">Dashboard</a>
             <a href="/history">Scan History</a>
+            <a href="/settings">Settings</a>
         </nav>
 
         <header>
@@ -212,22 +213,6 @@
                     );
                 }
 
-
-                /*
-                 * The API should return an array of scans.
-                 *
-                 * Example:
-                 *
-                 * [
-                 *     {
-                 *         "id": 1,
-                 *         "started_at": "...",
-                 *         "completed_at": "...",
-                 *         "devices_found": 5,
-                 *         "status": "completed"
-                 *     }
-                 * ]
-                 */
 
                 if (!Array.isArray(result)) {
                     throw new Error(
